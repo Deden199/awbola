@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "585314433558",
+    "project_id": "a8r-livestream",
+    "storage_bucket": "a8r-livestream.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:585314433558:android:125a3db900a83ee4939337",
+        "android_client_info": {
+          "package_name": "com.mod.aksesmudah.awbola"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB1QDMW7QWyhnR98VdSxQcUXj-05lzZ24g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
