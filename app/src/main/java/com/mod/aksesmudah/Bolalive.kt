@@ -5,27 +5,18 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Message
-import android.webkit.GeolocationPermissions
-import android.webkit.JsPromptResult
-import android.webkit.JsResult
-import android.webkit.PermissionRequest
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import android.webkit.*
 import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
+import com.bumptech.glide.Glide
 import com.google.android.material.bottomnavigation.BottomNavigationView
-import com.google.firebase.firestore.FirebaseFirestore
-import java.io.ByteArrayInputStream
-import java.util.Locale
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
-import androidx.recyclerview.widget.RecyclerView
-import com.bumptech.glide.Glide
+import java.io.ByteArrayInputStream
+import java.util.Locale
 
 class Bolalive : AppCompatActivity() {
 
@@ -33,39 +24,58 @@ class Bolalive : AppCompatActivity() {
     private lateinit var bannerPager: ViewPager2
     private lateinit var bottomNav: BottomNavigationView
 
-    private val bannerAdapter by lazy { BannerSliderAdapter { banner ->
-        openUrl(banner.targetUrl)
-    } }
+    // sementara: hardcode 3 banner (nanti bisa kamu ganti dari Firebase)
+    private val bannerImages = listOf(
+        "https://via.placeholder.com/800x400.png?text=Banner+1",
+        "https://via.placeholder.com/800x400.png?text=Banner+2",
+        "https://via.placeholder.com/800x400.png?text=Banner+3"
+    )
 
-    // 3 URL menu dari database
-    private val menuUrls: MutableList<String?> = mutableListOf(null, null, null)
-
-    private val firestore: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
-
-    private val DEFAULT_URL = "https://jalaa35.com/"
+    // sementara: hardcode 3 URL (nanti bisa diisi dari DB)
+    private val menuUrls = listOf(
+        "https://jalaa35.com/",          // Daftar
+        "https://jalaa35.com/",          // Login
+        "https://jalaa35.com/"           // Livechat
+    )
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Pakai layout dengan banner + webview + bottom nav
         setContentView(R.layout.activity_bolalive)
 
         webView = findViewById(R.id.mainWebView)
         bannerPager = findViewById(R.id.bannerPager)
         bottomNav = findViewById(R.id.bottomNav)
 
-        setupWebView()
         setupBannerSlider()
         setupBottomNav()
+        setupWebView()
 
-        // Load awal
-        openUrl(DEFAULT_URL)
-
-        // Muat data dari Firebase
-        loadBannersFromFirebase()
-        loadMenuUrlsFromFirebase()
+        webView.loadUrl("https://jalaa35.com/")
     }
 
+    private fun setupBannerSlider() {
+        val adapter = BannerSliderAdapter(bannerImages) { url ->
+            webView.loadUrl(url)
+        }
+        bannerPager.adapter = adapter
+        bannerPager.offscreenPageLimit = 3
+    }
+
+    private fun setupBottomNav() {
+        bottomNav.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.menu_home -> webView.loadUrl(menuUrls[0])
+                R.id.menu_login -> webView.loadUrl(menuUrls[1])
+                R.id.menu_livechat -> webView.loadUrl(menuUrls[2])
+            }
+            true
+        }
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
         val wv = webView
         wv.setLayerType(WebView.LAYER_TYPE_HARDWARE, null)
@@ -194,96 +204,12 @@ class Bolalive : AppCompatActivity() {
         }
     }
 
-    private fun setupBannerSlider() {
-        bannerPager.adapter = bannerAdapter
-        bannerPager.offscreenPageLimit = 3
-
-        val pageMargin = 12
-        val pageTransformer = ViewPager2.PageTransformer { page, position ->
-            val offset = pageMargin * position
-            page.translationX = -offset
-            val scale = 0.9f + (1 - kotlin.math.abs(position)) * 0.1f
-            page.scaleY = scale
-            page.alpha = 0.8f + (1 - kotlin.math.abs(position)) * 0.2f
-        }
-        bannerPager.setPageTransformer(pageTransformer)
-    }
-
-    private fun setupBottomNav() {
-        bottomNav.setOnItemSelectedListener { item ->
-            val index = when (item.itemId) {
-                R.id.menu_home -> 0
-                R.id.menu_live -> 1
-                R.id.menu_profile -> 2
-                else -> 0
-            }
-            val url = menuUrls.getOrNull(index) ?: DEFAULT_URL
-            openUrl(url)
-            true
-        }
-    }
-
-    private fun openUrl(url: String?) {
-        val finalUrl = if (url.isNullOrBlank()) DEFAULT_URL else url
-        webView.loadUrl(finalUrl)
-    }
-
-    // ===================== FIREBASE LOADERS =====================
-
-    private fun loadBannersFromFirebase() {
-        // Collection: bolalive, Doc: banners, field: items: [ { imageUrl, targetUrl }, ...]
-        firestore.collection("bolalive")
-            .document("banners")
-            .get()
-            .addOnSuccessListener { snapshot ->
-                val raw = snapshot.get("items") as? List<Map<String, Any?>> ?: emptyList()
-                val banners = raw.mapNotNull { map ->
-                    val imageUrl = map["imageUrl"] as? String
-                    val targetUrl = map["targetUrl"] as? String?
-                    if (imageUrl.isNullOrBlank()) null
-                    else BannerItem(imageUrl = imageUrl, targetUrl = targetUrl)
-                }
-                if (banners.isNotEmpty()) {
-                    bannerAdapter.submitList(banners)
-                }
-            }
-            .addOnFailureListener {
-                // optional: log / ignore
-            }
-    }
-
-    private fun loadMenuUrlsFromFirebase() {
-        // Collection: bolalive, Doc: menus, field: menu1Url, menu2Url, menu3Url
-        firestore.collection("bolalive")
-            .document("menus")
-            .get()
-            .addOnSuccessListener { snapshot ->
-                val m1 = snapshot.getString("menu1Url")
-                val m2 = snapshot.getString("menu2Url")
-                val m3 = snapshot.getString("menu3Url")
-
-                if (menuUrls.size >= 3) {
-                    menuUrls[0] = m1 ?: DEFAULT_URL
-                    menuUrls[1] = m2 ?: DEFAULT_URL
-                    menuUrls[2] = m3 ?: DEFAULT_URL
-                }
-            }
-            .addOnFailureListener {
-                // fallback semua ke default
-                if (menuUrls.size >= 3) {
-                    menuUrls[0] = DEFAULT_URL
-                    menuUrls[1] = DEFAULT_URL
-                    menuUrls[2] = DEFAULT_URL
-                }
-            }
-    }
-
     override fun onDestroy() {
         webView.destroy()
         super.onDestroy()
     }
 
-    // ====== JS: buang param ?ad= dari iframe player (matikan iklan 3–5 detik) ======
+    // ====== JS: buang param ?ad= dari iframe player bfh5.ygrbf.cc (matikan iklan 3–5 detik) ======
     private fun injectPlayerDeAd(view: WebView) {
         val js = """
             (function() {
@@ -298,7 +224,9 @@ class Bolalive : AppCompatActivity() {
                       const u = new URL(src, location.href);
                       if (u.hostname.includes('bfh5.ygrbf.cc') && (u.searchParams.has('ad') || /[?&]ad=/.test(src))) {
                         u.searchParams.delete('ad');
-                        if (!ifr.hasAttribute('allow')) ifr.setAttribute('allow','autoplay');
+                        if (!ifr.hasAttribute('allow')) {
+                          ifr.setAttribute('allow','autoplay');
+                        }
                         ifr.setAttribute('src', u.toString());
                         ifr.dataset.dead = "1";
                         touched = true;
@@ -312,15 +240,15 @@ class Bolalive : AppCompatActivity() {
                 const mo = new MutationObserver(() => stripAdParamOnce(document));
                 mo.observe(document.documentElement, { childList:true, subtree:true, attributes:true, attributeFilter:['src'] });
 
-                setTimeout(()=>stripAdParamOnce(document), 500);
-                setTimeout(()=>stripAdParamOnce(document), 1500);
+                setTimeout(() => stripAdParamOnce(document), 500);
+                setTimeout(() => stripAdParamOnce(document), 1500);
               } catch(e) {}
             })();
         """.trimIndent()
         view.post { view.evaluateJavascript(js, null) }
     }
 
-    // ====== CSS/JS: sembunyikan header/footer & fixed bars + target elemen spesifik ======
+    // ====== CSS/JS: sembunyikan header/footer & fixed bars + target elemen spesifik (guarded) ======
     private fun injectHideChrome(view: WebView) {
         val js = """
             (function() {
@@ -449,7 +377,7 @@ class Bolalive : AppCompatActivity() {
         view.post { view.evaluateJavascript(js, null) }
     }
 
-    // ====== JS: blokir popup/overlay/modal + netralisir window.open ======
+    // ====== JS: blokir popup/overlay/modal + netralisir window.open + sweep selektif (guarded) ======
     private fun injectPopupKiller(view: WebView) {
         val js = """
             (function() {
@@ -536,7 +464,7 @@ class Bolalive : AppCompatActivity() {
                   document.querySelectorAll('#playerTabs').forEach(n => { softHide(n); hit = true; });
 
                   document.querySelectorAll('button, .van-button, [role="button"]').forEach(btn => {
-                    val t = (btn.textContent || '').trim().toLowerCase();
+                    const t = (btn.textContent || '').trim().toLowerCase();
                     if (t === 'gabung') { btn.remove(); hit = true; }
                   });
 
@@ -570,68 +498,14 @@ class Bolalive : AppCompatActivity() {
     }
 }
 
-// ===================== DATA CLASS + ADAPTER BANNER =====================
-
-data class BannerItem(
-    val imageUrl: String,
-    val targetUrl: String?
-)
-
-class BannerSliderAdapter(
-    private val onClick: (BannerItem) -> Unit
-) : RecyclerView.Adapter<BannerSliderAdapter.BannerViewHolder>() {
-
-    private val items: MutableList<BannerItem> = mutableListOf()
-
-    fun submitList(newItems: List<BannerItem>) {
-        items.clear()
-        items.addAll(newItems)
-        notifyDataSetChanged()
-    }
-
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): BannerViewHolder {
-        val view = LayoutInflater.from(parent.context)
-            .inflate(R.layout.item_banner, parent, false)
-        return BannerViewHolder(view, onClick)
-    }
-
-    override fun onBindViewHolder(holder: BannerViewHolder, position: Int) {
-        holder.bind(items[position])
-    }
-
-    override fun getItemCount(): Int = items.size
-
-    class BannerViewHolder(
-        itemView: View,
-        private val onClick: (BannerItem) -> Unit
-    ) : RecyclerView.ViewHolder(itemView) {
-
-        private val imgBanner: ImageView = itemView.findViewById(R.id.imgBanner)
-        private var currentItem: BannerItem? = null
-
-        init {
-            itemView.setOnClickListener {
-                currentItem?.let(onClick)
-            }
-        }
-
-        fun bind(item: BannerItem) {
-            currentItem = item
-            Glide.with(imgBanner.context)
-                .load(item.imageUrl)
-                .centerCrop()
-                .into(imgBanner)
-        }
-    }
-}
-
-/** Ad-blocker (tetap sama seperti punyamu) */
+/** Ad-blocker: blok host/keyword + tebak MIME agar respons 204 aman untuk semua type */
 object AdBlocker {
     private val blockedHosts = setOf(
         "doubleclick.net","googleadservices.com","googlesyndication.com",
         "adservice.google.com","adservice.google.co.id","ads.pubmatic.com",
         "adnxs.com","rubiconproject.com","criteo.com","taboola.com","outbrain.com",
         "scorecardresearch.com","zedo.com","media.net",
+        // Tambahan promo/iklan
         "spb", "spotbet", "adserver", "popads"
     )
 
@@ -671,4 +545,29 @@ object AdBlocker {
             else -> "text/plain"
         }
     }
+}
+
+/** Adapter slider banner */
+class BannerSliderAdapter(
+    private val items: List<String>,
+    private val onClick: (String) -> Unit
+) : RecyclerView.Adapter<BannerSliderAdapter.BannerViewHolder>() {
+
+    inner class BannerViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val img: ImageView = view.findViewById(R.id.imgBanner)
+    }
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): BannerViewHolder {
+        val v = LayoutInflater.from(parent.context)
+            .inflate(R.layout.item_banner, parent, false)
+        return BannerViewHolder(v)
+    }
+
+    override fun onBindViewHolder(holder: BannerViewHolder, position: Int) {
+        val url = items[position]
+        Glide.with(holder.img.context).load(url).into(holder.img)
+        holder.itemView.setOnClickListener { onClick(url) }
+    }
+
+    override fun getItemCount(): Int = items.size
 }
