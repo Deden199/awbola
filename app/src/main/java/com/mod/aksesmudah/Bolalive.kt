@@ -1,6 +1,8 @@
 package com.mod.aksesmudah
 
 import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -11,6 +13,7 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.bumptech.glide.Glide
 import com.google.android.material.bottomnavigation.BottomNavigationView
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -18,25 +21,38 @@ import android.widget.ImageView
 import java.io.ByteArrayInputStream
 import java.util.Locale
 
+import com.google.firebase.FirebaseApp
+import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FirebaseFirestore
+
 class Bolalive : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private lateinit var bannerPager: ViewPager2
     private lateinit var bottomNav: BottomNavigationView
+    private lateinit var bannerAdapter: BannerSliderAdapter
 
-    // sementara: hardcode 3 banner (nanti bisa kamu ganti dari Firebase)
-    private val bannerImages = listOf(
+    private val firestore: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
+
+    companion object {
+        private const val TAG = "Bolalive"
+        private const val CONFIG_COLLECTION = "app_config"
+        private const val CONFIG_DOCUMENT = "bolalive"
+    }
+
+    private val defaultBannerImages = listOf(
         "https://via.placeholder.com/800x400.png?text=Banner+1",
         "https://via.placeholder.com/800x400.png?text=Banner+2",
         "https://via.placeholder.com/800x400.png?text=Banner+3"
     )
+    private val bannerImages = mutableListOf<String>()
 
-    // sementara: hardcode 3 URL (nanti bisa diisi dari DB)
-    private val menuUrls = listOf(
+    private val defaultMenuUrls = listOf(
         "https://jalaa35.com/",          // Daftar
         "https://jalaa35.com/",          // Login
         "https://jalaa35.com/"           // Livechat
     )
+    private val menuUrls = mutableListOf<String>()
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -45,33 +61,157 @@ class Bolalive : AppCompatActivity() {
         // Pakai layout dengan banner + webview + bottom nav
         setContentView(R.layout.activity_bolalive)
 
+        FirebaseApp.initializeApp(this)
+
         webView = findViewById(R.id.mainWebView)
         bannerPager = findViewById(R.id.bannerPager)
         bottomNav = findViewById(R.id.bottomNav)
+
+        bannerImages.clear()
+        bannerImages.addAll(defaultBannerImages)
+        menuUrls.clear()
+        menuUrls.addAll(defaultMenuUrls)
 
         setupBannerSlider()
         setupBottomNav()
         setupWebView()
 
-        webView.loadUrl("https://jalaa35.com/")
+        fetchRemoteConfig()
     }
 
     private fun setupBannerSlider() {
-        val adapter = BannerSliderAdapter(bannerImages) { url ->
-            webView.loadUrl(url)
+        bannerAdapter = BannerSliderAdapter(bannerImages) { url ->
+            loadUrlIfValid(url)
         }
-        bannerPager.adapter = adapter
+        bannerPager.adapter = bannerAdapter
         bannerPager.offscreenPageLimit = 3
     }
 
     private fun setupBottomNav() {
         bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
-                R.id.menu_home -> webView.loadUrl(menuUrls[0])
-                R.id.menu_login -> webView.loadUrl(menuUrls[1])
-                R.id.menu_livechat -> webView.loadUrl(menuUrls[2])
+                R.id.menu_home -> loadMenuUrl(0)
+                R.id.menu_login -> loadMenuUrl(1)
+                R.id.menu_livechat -> loadMenuUrl(2)
             }
             true
+        }
+    }
+
+    private fun loadMenuUrl(index: Int) {
+        val url = menuUrls.getOrNull(index) ?: defaultMenuUrls.getOrNull(index)
+        val sanitized = sanitizeUrl(url)
+        if (sanitized != null) {
+            openInChrome(sanitized)
+        } else if (!url.isNullOrBlank()) {
+            Log.w(TAG, "Ignored invalid url: $url")
+        }
+    }
+
+    private fun loadUrlIfValid(url: String?) {
+        val sanitized = sanitizeUrl(url)
+        if (sanitized != null) {
+            webView.loadUrl(sanitized)
+        } else if (!url.isNullOrBlank()) {
+            Log.w(TAG, "Ignored invalid url: $url")
+        }
+    }
+
+    private fun openInChrome(url: String) {
+        val uri = Uri.parse(url)
+        val chromeIntent = Intent(Intent.ACTION_VIEW, uri).apply {
+            setPackage("com.android.chrome")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+
+        try {
+            startActivity(chromeIntent)
+        } catch (notFound: ActivityNotFoundException) {
+            val fallback = Intent(Intent.ACTION_VIEW, uri).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            try {
+                startActivity(fallback)
+            } catch (e: ActivityNotFoundException) {
+                Log.w(TAG, "No browser available to handle url: $url", e)
+            }
+        }
+    }
+
+    private fun sanitizeUrl(value: String?): String? {
+        val trimmed = value?.trim() ?: return null
+        if (trimmed.isEmpty()) return null
+        return if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) trimmed else null
+    }
+
+    private fun updateBannerImages(newUrls: List<String>) {
+        if (!::bannerAdapter.isInitialized) return
+        val sanitized = newUrls.mapNotNull { sanitizeUrl(it) }
+        if (sanitized.isEmpty()) return
+        bannerAdapter.updateItems(sanitized)
+    }
+
+    private fun updateMenuUrls(raw: Any?) {
+        val candidates = when (raw) {
+            is List<*> -> raw.map { it as? String }
+            is Map<*, *> -> listOf(
+                (raw["home"] ?: raw["daftar"]) as? String,
+                raw["login"] as? String,
+                (raw["livechat"] ?: raw["chat"]) as? String
+            )
+            else -> emptyList()
+        }
+
+        if (candidates.isEmpty()) return
+
+        val merged = mutableListOf<String>()
+        for (i in defaultMenuUrls.indices) {
+            val sanitized = sanitizeUrl(candidates.getOrNull(i))
+            if (sanitized != null) {
+                merged.add(sanitized)
+            } else {
+                merged.add(defaultMenuUrls[i])
+            }
+        }
+
+        menuUrls.clear()
+        menuUrls.addAll(merged)
+
+    }
+
+    private fun fetchRemoteConfig() {
+        firestore.collection(CONFIG_COLLECTION)
+            .document(CONFIG_DOCUMENT)
+            .get()
+            .addOnSuccessListener { document ->
+                if (document != null && document.exists()) {
+                    applyRemoteConfig(document)
+                } else {
+                    Log.w(TAG, "Remote config document missing")
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "Failed to load remote config", e)
+            }
+    }
+
+    private fun applyRemoteConfig(document: DocumentSnapshot) {
+        val bannerData = document.get("bannerUrls") ?: document.get("banners")
+        if (bannerData is List<*>) {
+            updateBannerImages(bannerData.mapNotNull { it as? String })
+        }
+
+        val menuData = document.get("menuUrls") ?: document.get("menus")
+        updateMenuUrls(menuData)
+
+        val startUrl = listOf(
+            document.getString("webviewUrl"),
+            document.getString("defaultUrl"),
+            document.getString("homeUrl")
+        ).firstOrNull { !it.isNullOrBlank() }
+
+        if (startUrl != null) {
+            loadUrlIfValid(startUrl)
         }
     }
 
@@ -549,7 +689,7 @@ object AdBlocker {
 
 /** Adapter slider banner */
 class BannerSliderAdapter(
-    private val items: List<String>,
+    private val items: MutableList<String>,
     private val onClick: (String) -> Unit
 ) : RecyclerView.Adapter<BannerSliderAdapter.BannerViewHolder>() {
 
@@ -570,4 +710,10 @@ class BannerSliderAdapter(
     }
 
     override fun getItemCount(): Int = items.size
+
+    fun updateItems(newItems: List<String>) {
+        items.clear()
+        items.addAll(newItems)
+        notifyDataSetChanged()
+    }
 }
