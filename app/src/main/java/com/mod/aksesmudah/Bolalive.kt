@@ -14,10 +14,13 @@ import androidx.viewpager2.widget.ViewPager2
 import com.bumptech.glide.Glide
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import android.util.Log
+import android.content.pm.ActivityInfo
+import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.FrameLayout
 import java.io.ByteArrayInputStream
 import java.util.Locale
 
@@ -31,6 +34,10 @@ class Bolalive : AppCompatActivity() {
     private lateinit var bannerPager: ViewPager2
     private lateinit var bottomNav: BottomNavigationView
     private lateinit var bannerAdapter: BannerSliderAdapter
+    private var customView: View? = null
+    private var customViewCallback: WebChromeClient.CustomViewCallback? = null
+    private var fullScreenContainer: FrameLayout? = null
+    private var originalOrientation: Int = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
 
     private val firestore: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
 
@@ -298,6 +305,41 @@ class Bolalive : AppCompatActivity() {
             ) {
                 callback?.invoke(origin, false, false)
             }
+
+            override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                if (view == null) {
+                    callback?.onCustomViewHidden()
+                    return
+                }
+
+                if (customView != null) {
+                    callback?.onCustomViewHidden()
+                    return
+                }
+
+                customView = view
+                customViewCallback = callback
+                originalOrientation = requestedOrientation
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+
+                fullScreenContainer = FrameLayout(this@Bolalive).apply {
+                    setBackgroundColor(Color.BLACK)
+                    addView(
+                        view,
+                        ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                    )
+                }
+
+                findViewById<ViewGroup>(android.R.id.content).addView(fullScreenContainer)
+                updateChromeVisibility(isFullscreen = true)
+            }
+
+            override fun onHideCustomView() {
+                exitFullscreen()
+            }
         }
 
         wv.webViewClient = object : WebViewClient() {
@@ -342,6 +384,38 @@ class Bolalive : AppCompatActivity() {
                 return super.shouldInterceptRequest(view, request)
             }
         }
+    }
+
+    override fun onBackPressed() {
+        if (customView != null) {
+            exitFullscreen()
+            return
+        }
+
+        if (webView.canGoBack()) {
+            webView.goBack()
+        } else {
+            super.onBackPressed()
+        }
+    }
+
+    private fun exitFullscreen() {
+        fullScreenContainer?.let { container ->
+            container.removeAllViews()
+            findViewById<ViewGroup>(android.R.id.content).removeView(container)
+        }
+        fullScreenContainer = null
+        customView = null
+        customViewCallback?.onCustomViewHidden()
+        customViewCallback = null
+        requestedOrientation = originalOrientation
+        updateChromeVisibility(isFullscreen = false)
+    }
+
+    private fun updateChromeVisibility(isFullscreen: Boolean) {
+        val visibility = if (isFullscreen) View.GONE else View.VISIBLE
+        bannerPager.visibility = visibility
+        bottomNav.visibility = visibility
     }
 
     override fun onDestroy() {
