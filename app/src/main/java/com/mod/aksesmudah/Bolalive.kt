@@ -27,6 +27,7 @@ import java.util.Locale
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FieldValue
 
 class Bolalive : AppCompatActivity() {
 
@@ -83,7 +84,7 @@ class Bolalive : AppCompatActivity() {
         setupBottomNav()
         setupWebView()
 
-        fetchRemoteConfig()
+        seedFirestoreConfigIfMissing { fetchRemoteConfig() }
     }
 
     private fun setupBannerSlider() {
@@ -199,6 +200,41 @@ class Bolalive : AppCompatActivity() {
             }
             .addOnFailureListener { e ->
                 Log.w(TAG, "Failed to load remote config", e)
+            }
+    }
+
+    private fun seedFirestoreConfigIfMissing(onComplete: () -> Unit) {
+        firestore.collection(CONFIG_COLLECTION)
+            .document(CONFIG_DOCUMENT)
+            .get()
+            .addOnSuccessListener { document ->
+                if (document != null && document.exists()) {
+                    onComplete()
+                    return@addOnSuccessListener
+                }
+
+                val seedData = mapOf(
+                    "bannerUrls" to defaultBannerImages,
+                    "menuUrls" to defaultMenuUrls,
+                    "webviewUrl" to defaultMenuUrls.firstOrNull(),
+                    "seededAt" to FieldValue.serverTimestamp()
+                )
+
+                firestore.collection(CONFIG_COLLECTION)
+                    .document(CONFIG_DOCUMENT)
+                    .set(seedData)
+                    .addOnSuccessListener {
+                        Log.i(TAG, "Seeded default Firestore config: $CONFIG_COLLECTION/$CONFIG_DOCUMENT")
+                        onComplete()
+                    }
+                    .addOnFailureListener { e ->
+                        Log.w(TAG, "Failed to seed Firestore config", e)
+                        onComplete()
+                    }
+            }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "Failed to check Firestore config state", e)
+                onComplete()
             }
     }
 
