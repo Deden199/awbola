@@ -16,6 +16,9 @@ android {
         versionCode = 1
         versionName = "1.0"
 
+        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"a8r-livestream\"")
+        buildConfigField("String", "FIREBASE_API_KEY", "\"AIzaSyB1QDMW7QWyhnR98VdSxQcUXj-05lzZ24g\"")
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

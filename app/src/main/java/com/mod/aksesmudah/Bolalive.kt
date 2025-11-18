@@ -23,11 +23,18 @@ import android.widget.ImageView
 import android.widget.FrameLayout
 import java.io.ByteArrayInputStream
 import java.util.Locale
+import java.time.Instant
 
+import com.google.android.gms.common.ConnectionResult
+import com.google.android.gms.common.GoogleApiAvailability
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FieldValue
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.net.HttpURLConnection
+import java.net.URL
 
 class Bolalive : AppCompatActivity() {
 
@@ -204,6 +211,16 @@ class Bolalive : AppCompatActivity() {
     }
 
     private fun seedFirestoreConfigIfMissing(onComplete: () -> Unit) {
+        // Cek Google Play Services dulu agar tidak crash pada perangkat yang tidak ada GMS (pesan "Unknown calling package name").
+        val hasGms = GoogleApiAvailability.getInstance()
+            .isGooglePlayServicesAvailable(this) == ConnectionResult.SUCCESS
+
+        if (!hasGms) {
+            Log.w(TAG, "Google Play Services tidak tersedia, fallback seeding via REST")
+            seedViaRest(onComplete)
+            return
+        }
+
         firestore.collection(CONFIG_COLLECTION)
             .document(CONFIG_DOCUMENT)
             .get()
@@ -233,9 +250,85 @@ class Bolalive : AppCompatActivity() {
                     }
             }
             .addOnFailureListener { e ->
-                Log.w(TAG, "Failed to check Firestore config state", e)
-                onComplete()
+                // Fallback jika error karena GMS
+                if (e is SecurityException && e.message?.contains("com.google.android.gms") == true) {
+                    Log.w(TAG, "Seeding gagal karena GMS, coba REST", e)
+                    seedViaRest(onComplete)
+                } else {
+                    Log.w(TAG, "Failed to check Firestore config state", e)
+                    onComplete()
+                }
             }
+    }
+
+    private fun seedViaRest(onComplete: () -> Unit) {
+        Thread {
+            try {
+                val baseUrl = "https://firestore.googleapis.com/v1/projects/${BuildConfig.FIREBASE_PROJECT_ID}/databases/(default)/documents/$CONFIG_COLLECTION/$CONFIG_DOCUMENT"
+                val getUrl = URL("$baseUrl?key=${BuildConfig.FIREBASE_API_KEY}")
+                val getConn = (getUrl.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 5000
+                    readTimeout = 5000
+                }
+
+                if (getConn.responseCode == HttpURLConnection.HTTP_OK) {
+                    Log.i(TAG, "REST: dokumen sudah ada, lewati seeding")
+                    runOnUiThread { onComplete() }
+                    return@Thread
+                }
+
+                val payload = buildSeedJson()
+                val postConn = (URL("$baseUrl?key=${BuildConfig.FIREBASE_API_KEY}").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "PATCH"
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                    connectTimeout = 5000
+                    readTimeout = 5000
+                }
+
+                postConn.outputStream.use { it.write(payload.toByteArray()) }
+
+                val success = postConn.responseCode in 200..299
+                val response = try {
+                    BufferedReader(InputStreamReader(if (success) postConn.inputStream else postConn.errorStream)).use { reader ->
+                        reader.readText()
+                    }
+                } catch (_: Exception) {
+                    ""
+                }
+
+                if (success) {
+                    Log.i(TAG, "REST: seeded Firestore config")
+                } else {
+                    Log.w(TAG, "REST seeding failed: HTTP ${postConn.responseCode} $response")
+                }
+            } catch (ex: Exception) {
+                Log.w(TAG, "REST seeding exception", ex)
+            } finally {
+                runOnUiThread { onComplete() }
+            }
+        }.start()
+    }
+
+    private fun buildSeedJson(): String {
+        fun arrayJson(values: List<String>): String {
+            return values.joinToString(prefix = "[", postfix = "]") { "{\"stringValue\":\"" + it + "\"}" }
+        }
+
+        val banners = arrayJson(defaultBannerImages)
+        val menus = arrayJson(defaultMenuUrls)
+
+        val timestamp = Instant.ofEpochMilli(System.currentTimeMillis()).toString()
+
+        return """
+            {"fields":{
+                "bannerUrls":{"arrayValue":{"values":$banners}},
+                "menuUrls":{"arrayValue":{"values":$menus}},
+                "webviewUrl":{"stringValue":"${defaultMenuUrls.firstOrNull() ?: ""}"},
+                "seededAt":{"timestampValue":"$timestamp"}
+            }}
+        """.trimIndent()
     }
 
     private fun applyRemoteConfig(document: DocumentSnapshot) {
