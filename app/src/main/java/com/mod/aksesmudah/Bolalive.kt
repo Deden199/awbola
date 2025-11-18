@@ -189,12 +189,20 @@ class Bolalive : AppCompatActivity() {
                     applyRemoteConfig(document)
                 } else {
                     Log.w(TAG, "Remote config document missing")
+                    applyLocalDefaults()
                     seedDefaultConfig()
                 }
             }
             .addOnFailureListener { e ->
                 Log.w(TAG, "Failed to load remote config", e)
+                applyLocalDefaults()
             }
+    }
+
+    private fun applyLocalDefaults() {
+        updateBannerImages(defaultBannerImages)
+        updateMenuUrls(defaultMenuUrls)
+        loadUrlIfValid(defaultMenuUrls.firstOrNull())
     }
 
     private fun seedDefaultConfig() {
