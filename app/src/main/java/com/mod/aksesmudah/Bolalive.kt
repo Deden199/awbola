@@ -21,6 +21,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.FrameLayout
+import android.widget.Toast
 import java.io.ByteArrayInputStream
 import java.util.Locale
 import java.time.Instant
@@ -48,6 +49,7 @@ class Bolalive : AppCompatActivity() {
     private var originalOrientation: Int = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
 
     private val firestore: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
+    private var missingDbHintShown = false
 
     companion object {
         private const val TAG = "Bolalive"
@@ -206,7 +208,9 @@ class Bolalive : AppCompatActivity() {
                 }
             }
             .addOnFailureListener { e ->
-                Log.w(TAG, "Failed to load remote config", e)
+                if (!maybeHandleMissingDatabase("Load remote config", e.message)) {
+                    Log.w(TAG, "Failed to load remote config", e)
+                }
             }
     }
 
@@ -250,8 +254,14 @@ class Bolalive : AppCompatActivity() {
                     }
             }
             .addOnFailureListener { e ->
-                // Fallback jika error karena GMS
-                if (e is SecurityException && e.message?.contains("com.google.android.gms") == true) {
+                // Fallback jika error karena GMS atau Firestore belum diaktifkan
+                val message = e.message
+                if (maybeHandleMissingDatabase("Firestore seeding", message)) {
+                    onComplete()
+                    return@addOnFailureListener
+                }
+
+                if (e is SecurityException && message?.contains("com.google.android.gms") == true) {
                     Log.w(TAG, "Seeding gagal karena GMS, coba REST", e)
                     seedViaRest(onComplete)
                 } else {
@@ -280,15 +290,7 @@ class Bolalive : AppCompatActivity() {
 
                 if (getConn.responseCode == HttpURLConnection.HTTP_NOT_FOUND) {
                     val body = readResponseBody(getConn)
-                    if (body.contains("database (default) does not exist", ignoreCase = true) ||
-                        body.contains("does not exist for project", ignoreCase = true)
-                    ) {
-                        Log.w(
-                            TAG,
-                            "REST: Firestore database belum dibuat untuk project ${BuildConfig.FIREBASE_PROJECT_ID}. " +
-                                "Buat terlebih dahulu di console lalu coba lagi. Response: $body"
-                        )
-                    } else {
+                    if (!maybeHandleMissingDatabase("REST seeding", body)) {
                         Log.w(TAG, "REST seeding gagal (404): $body")
                     }
                     runOnUiThread { onComplete() }
@@ -349,6 +351,30 @@ class Bolalive : AppCompatActivity() {
                 "seededAt":{"timestampValue":"$timestamp"}
             }}
         """.trimIndent()
+    }
+
+    private fun maybeHandleMissingDatabase(source: String, detail: String?): Boolean {
+        val normalized = detail?.lowercase(Locale.US) ?: ""
+        val missing = normalized.contains("database (default) does not exist") ||
+            normalized.contains("does not exist for project")
+
+        if (!missing) return false
+
+        val message =
+            "Firestore database belum dibuat untuk project ${BuildConfig.FIREBASE_PROJECT_ID}. " +
+                "Buka console Firebase, pilih Firestore Database, dan klik Create database (Native/Production)."
+
+        if (missingDbHintShown) {
+            Log.w(TAG, "$source: $message Detail: $detail")
+            return true
+        }
+
+        missingDbHintShown = true
+        Log.w(TAG, "$source: $message Detail: $detail")
+        runOnUiThread {
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        }
+        return true
     }
 
     private fun applyRemoteConfig(document: DocumentSnapshot) {
