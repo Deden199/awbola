@@ -7,16 +7,29 @@
     <androidx.cardview.widget.CardView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_margin="4dp"
-        app:cardCornerRadius="12dp"
+        android:layout_margin="8dp"
+        app:cardCornerRadius="18dp"
         app:cardUseCompatPadding="true"
-        app:cardElevation="4dp">
+        app:cardElevation="10dp"
+        app:cardPreventCornerOverlap="true"
+        app:cardBackgroundColor="@android:color/transparent">
 
-        <ImageView
-            android:id="@+id/imgBanner"
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:scaleType="centerCrop" />
+            android:layout_height="match_parent">
+
+            <ImageView
+                android:id="@+id/imgBanner"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:foreground="?attr/selectableItemBackground"
+                android:scaleType="centerCrop" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_banner_overlay" />
+        </FrameLayout>
     </androidx.cardview.widget.CardView>
 
 </FrameLayout>
