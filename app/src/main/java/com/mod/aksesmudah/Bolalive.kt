@@ -11,6 +11,8 @@ import android.webkit.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
+import androidx.viewpager2.widget.CompositePageTransformer
+import androidx.viewpager2.widget.MarginPageTransformer
 import com.bumptech.glide.Glide
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import android.util.Log
@@ -24,6 +26,7 @@ import android.widget.FrameLayout
 import java.io.ByteArrayInputStream
 import java.util.Locale
 import java.time.Instant
+import kotlin.math.abs
 
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
@@ -100,6 +103,16 @@ class Bolalive : AppCompatActivity() {
         }
         bannerPager.adapter = bannerAdapter
         bannerPager.offscreenPageLimit = 3
+
+        val transformer = CompositePageTransformer().apply {
+            addTransformer(MarginPageTransformer(32))
+            addTransformer { page, position ->
+                val scale = 0.9f + (1 - abs(position)) * 0.1f
+                page.scaleY = scale
+                page.alpha = 0.8f + (1 - abs(position)) * 0.2f
+            }
+        }
+        bannerPager.setPageTransformer(transformer)
     }
 
     private fun setupBottomNav() {
