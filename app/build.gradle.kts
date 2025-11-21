@@ -1,8 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-
-    alias(libs.plugins.google.gms.google.services)         // FIX kapt
+    alias(libs.plugins.google.gms.google.services)
 }
 
 android {
@@ -16,6 +15,7 @@ android {
         versionCode = 1
         versionName = "1.0"
 
+        // Dipakai REST Firestore
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"a8r-livestream\"")
         buildConfigField("String", "FIREBASE_API_KEY", "\"AIzaSyB1QDMW7QWyhnR98VdSxQcUXj-05lzZ24g\"")
 
@@ -32,6 +32,11 @@ android {
         }
     }
 
+    // wajib di AGP baru supaya BuildConfig.* kebentuk
+    buildFeatures {
+        buildConfig = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
@@ -43,20 +48,30 @@ android {
 }
 
 dependencies {
-
+    // AndroidX & UI
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
-
-    // Slider + UI
     implementation(libs.androidx.viewpager2)
-    implementation(libs.androidx.constraintlayout)      // ⬅️ pakai ini
+    implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.cardview)
 
     // Glide
     implementation("com.github.bumptech.glide:glide:5.0.5")
-    implementation(libs.firebase.analytics)
-    implementation(libs.firebase.firestore)
+
+    // ====================== FIREBASE & GMS ======================
+
+    // BOM biar versi semua lib Firebase sinkron
+    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
+
+    // Firebase Analytics & Firestore (pakai -ktx biar idiomatic Kotlin)
+    implementation("com.google.firebase:firebase-analytics-ktx")
+    implementation("com.google.firebase:firebase-firestore-ktx")
+
+    // Google Play Services base (buat GoogleApiAvailability, dll)
+    implementation("com.google.android.gms:play-services-base:18.5.0")
+
+    // ============================================================
 
     // Test
     testImplementation(libs.junit)
