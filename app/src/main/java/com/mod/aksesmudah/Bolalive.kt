@@ -278,6 +278,23 @@ class Bolalive : AppCompatActivity() {
                     return@Thread
                 }
 
+                if (getConn.responseCode == HttpURLConnection.HTTP_NOT_FOUND) {
+                    val body = readResponseBody(getConn)
+                    if (body.contains("database (default) does not exist", ignoreCase = true) ||
+                        body.contains("does not exist for project", ignoreCase = true)
+                    ) {
+                        Log.w(
+                            TAG,
+                            "REST: Firestore database belum dibuat untuk project ${BuildConfig.FIREBASE_PROJECT_ID}. " +
+                                "Buat terlebih dahulu di console lalu coba lagi. Response: $body"
+                        )
+                    } else {
+                        Log.w(TAG, "REST seeding gagal (404): $body")
+                    }
+                    runOnUiThread { onComplete() }
+                    return@Thread
+                }
+
                 val payload = buildSeedJson()
                 val postConn = (URL("$baseUrl?key=${BuildConfig.FIREBASE_API_KEY}").openConnection() as HttpURLConnection).apply {
                     requestMethod = "PATCH"
@@ -290,13 +307,7 @@ class Bolalive : AppCompatActivity() {
                 postConn.outputStream.use { it.write(payload.toByteArray()) }
 
                 val success = postConn.responseCode in 200..299
-                val response = try {
-                    BufferedReader(InputStreamReader(if (success) postConn.inputStream else postConn.errorStream)).use { reader ->
-                        reader.readText()
-                    }
-                } catch (_: Exception) {
-                    ""
-                }
+                val response = readResponseBody(postConn)
 
                 if (success) {
                     Log.i(TAG, "REST: seeded Firestore config")
@@ -309,6 +320,15 @@ class Bolalive : AppCompatActivity() {
                 runOnUiThread { onComplete() }
             }
         }.start()
+    }
+
+    private fun readResponseBody(conn: HttpURLConnection): String {
+        return try {
+            val stream = conn.errorStream ?: conn.inputStream
+            BufferedReader(InputStreamReader(stream)).use { it.readText() }
+        } catch (_: Exception) {
+            ""
+        }
     }
 
     private fun buildSeedJson(): String {
