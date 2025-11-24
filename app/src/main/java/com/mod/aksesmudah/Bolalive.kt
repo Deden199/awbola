@@ -661,8 +661,6 @@ class Bolalive : AppCompatActivity() {
                     '.van-button.van-button--default.van-button--normal.van-button--round',
                     'img.kehuIcon',
                     'img.play_off_btn',
-                    '.van-tabs__wrap',
-                    '.van-tabs__nav',
                     '.swipeBox',
                     '.van-swipe__indicators',
                     '.liveTimeDownload',
@@ -670,16 +668,13 @@ class Bolalive : AppCompatActivity() {
                     '.noticebar',
                     '.van-notice-bar',
                     '.van-notice-bar__wrap',
-                    '.van-notice-bar__content',
-                    '#playerTabs'
+                    '.van-notice-bar__content'
                   ];
                   let found = false;
                   sels.forEach(sel => {
                     const list = document.querySelectorAll(sel);
                     if (list.length) found = true;
-                    list.forEach(n => {
-                      if (sel === '#playerTabs') softHide(n); else n.remove();
-                    });
+                    list.forEach(n => n.remove());
                   });
 
                   document.querySelectorAll('button, .van-button, [role="button"]').forEach(btn => {
@@ -798,8 +793,6 @@ class Bolalive : AppCompatActivity() {
                     '.van-button.van-button--default.van-button--normal.van-button--round',
                     'img.kehuIcon',
                     'img.play_off_btn',
-                    '.van-tabs__wrap',
-                    '.van-tabs__nav',
                     '.swipeBox',
                     '.van-swipe__indicators',
                     '.liveTimeDownload',
@@ -813,8 +806,6 @@ class Bolalive : AppCompatActivity() {
                     if (list.length) hit = true;
                     list.forEach(n => n.remove());
                   });
-
-                  document.querySelectorAll('#playerTabs').forEach(n => { softHide(n); hit = true; });
 
                   document.querySelectorAll('button, .van-button, [role="button"]').forEach(btn => {
                     const t = (btn.textContent || '').trim().toLowerCase();
@@ -908,18 +899,28 @@ class Bolalive : AppCompatActivity() {
                   return wrapper;
                 }
 
-                function attachBanner(target) {
-                  if (!target || target.dataset?.wvBanner === '1') return false;
+                function attachBanner(target, position) {
+                  if (!target) return false;
+                  const marker = position === 'before' ? 'wvBannerBefore' : 'wvBannerAfter';
+                  if (target.dataset?.[marker] === '1') return false;
                   const banner = buildBanner();
-                  target.insertAdjacentElement('afterend', banner);
-                  target.dataset.wvBanner = '1';
+                  if (position === 'before') {
+                    target.insertAdjacentElement('beforebegin', banner);
+                  } else {
+                    target.insertAdjacentElement('afterend', banner);
+                  }
+                  target.dataset[marker] = '1';
                   return true;
                 }
 
                 function sweep(root) {
                   let injected = 0;
                   (root || document).querySelectorAll('iframe, video').forEach(node => {
-                    if (attachBanner(node)) injected++;
+                    if (attachBanner(node, 'after')) injected++;
+                  });
+
+                  (root || document).querySelectorAll('#playerTabs').forEach(node => {
+                    if (attachBanner(node, 'before')) injected++;
                   });
                   return injected;
                 }
