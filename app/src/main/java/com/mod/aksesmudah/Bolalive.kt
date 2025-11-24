@@ -664,6 +664,10 @@ class Bolalive : AppCompatActivity() {
                     '.swipeBox',
                     '.van-swipe__indicators',
                     '.liveTimeDownload',
+                                        '.van-tabs__wrap',
+                                        '.van-tabs__nav',
+                                                            '.van-notice-bar__content',
+                                                            '#playerTabs'
                     '.rightListBox',
                     '.noticebar',
                     '.van-notice-bar',
@@ -674,6 +678,9 @@ class Bolalive : AppCompatActivity() {
                   sels.forEach(sel => {
                     const list = document.querySelectorAll(sel);
                     if (list.length) found = true;
+                                        list.forEach(n => {
+                                          if (sel === '#playerTabs') softHide(n); else n.remove();
+                                        });
                     list.forEach(n => n.remove());
                   });
 
@@ -792,6 +799,8 @@ class Bolalive : AppCompatActivity() {
                     '.product-html-class',
                     '.van-button.van-button--default.van-button--normal.van-button--round',
                     'img.kehuIcon',
+                                        '.van-tabs__wrap',
+                                        '.van-tabs__nav',
                     'img.play_off_btn',
                     '.swipeBox',
                     '.van-swipe__indicators',
@@ -806,6 +815,8 @@ class Bolalive : AppCompatActivity() {
                     if (list.length) hit = true;
                     list.forEach(n => n.remove());
                   });
+                  document.querySelectorAll('#playerTabs').forEach(n => { softHide(n); hit = true; });
+
 
                   document.querySelectorAll('button, .van-button, [role="button"]').forEach(btn => {
                     const t = (btn.textContent || '').trim().toLowerCase();
