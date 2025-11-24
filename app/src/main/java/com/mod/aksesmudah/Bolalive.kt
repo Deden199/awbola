@@ -652,16 +652,18 @@ class Bolalive : AppCompatActivity() {
                   return removed;
                 }
 
-                function nukeTargetsOnce() {
-                  const sels = [
-                    '.maskClass',
-                    '.centerViewClass',
-                    '.bottomDownload',
-                    '.product-html-class',
-                    '.van-button.van-button--default.van-button--normal.van-button--round',
-                    'img.kehuIcon',
-                    'img.play_off_btn',
-                    '.swipeBox',
+                  function nukeTargetsOnce() {
+                    const sels = [
+                      '.maskClass',
+                      '.centerViewClass',
+                      '.bottomDownload',
+                      '.topDownloadBox',
+                      '.topDownload-keep-px',
+                      '.product-html-class',
+                      '.van-button.van-button--default.van-button--normal.van-button--round',
+                      'img.kehuIcon',
+                      'img.play_off_btn',
+                      '.swipeBox',
                     '.van-swipe__indicators',
                     '.liveTimeDownload',
                                         '.van-tabs__wrap',
@@ -681,18 +683,18 @@ class Bolalive : AppCompatActivity() {
                                         list.forEach(n => {
                                           if (sel === '#playerTabs') softHide(n); else n.remove();
                                         });
-                    list.forEach(n => n.remove());
-                  });
+                      list.forEach(n => n.remove());
+                    });
 
-                  document.querySelectorAll('button, .van-button, [role="button"]').forEach(btn => {
-                    const t = (btn.textContent || '').trim().toLowerCase();
-                    if (t === 'gabung') { btn.remove(); found = true; }
-                  });
+                    document.querySelectorAll('button, .van-button, [role="button"]').forEach(btn => {
+                      const t = (btn.textContent || '').trim().toLowerCase();
+                      if (t === 'gabung') { btn.remove(); found = true; }
+                    });
 
-                  document.querySelectorAll('.btn, .bottomDownload .btn, .rightcon .btn').forEach(x => {
-                    const t = (x.textContent || '').trim().toLowerCase();
-                    if (t === 'unduh') { (x.closest('.bottomDownload') || x).remove(); found = true; }
-                  });
+                    document.querySelectorAll('.btn, .bottomDownload .btn, .rightcon .btn, .topDownloadBox .btn').forEach(x => {
+                      const t = (x.textContent || '').trim().toLowerCase();
+                      if (t === 'unduh') { (x.closest('.bottomDownload, .topDownloadBox') || x).remove(); found = true; }
+                    });
 
                   if (removeAdIframes()) found = true;
 
