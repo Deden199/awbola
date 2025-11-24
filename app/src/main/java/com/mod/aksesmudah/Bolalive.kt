@@ -65,6 +65,13 @@ class Bolalive : AppCompatActivity() {
     )
     private val menuUrls = mutableListOf<String>()
 
+    private val defaultInlineBannerImageUrl =
+        "https://via.placeholder.com/320x100.png?text=Inline+Ads+Banner"
+    private val defaultInlineBannerTargetUrl = defaultMenuUrls.first()
+
+    private var inlineBannerImageUrl: String? = null
+    private var inlineBannerTargetUrl: String? = null
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -82,6 +89,9 @@ class Bolalive : AppCompatActivity() {
         bannerImages.addAll(defaultBannerImages)
         menuUrls.clear()
         menuUrls.addAll(defaultMenuUrls)
+
+        inlineBannerImageUrl = sanitizeUrl(defaultInlineBannerImageUrl)
+        inlineBannerTargetUrl = sanitizeUrl(defaultInlineBannerTargetUrl)
 
         setupBannerSlider()
         setupBottomNav()
@@ -240,6 +250,8 @@ class Bolalive : AppCompatActivity() {
                     "bannerUrls" to defaultBannerImages,
                     "menuUrls" to defaultMenuUrls,
                     "webviewUrl" to defaultMenuUrls.firstOrNull(),
+                    "iframeBannerImage" to defaultInlineBannerImageUrl,
+                    "iframeBannerTarget" to defaultInlineBannerTargetUrl,
                     "seededAt" to FieldValue.serverTimestamp()
                 )
 
@@ -352,6 +364,8 @@ class Bolalive : AppCompatActivity() {
                 "bannerUrls":{"arrayValue":{"values":$banners}},
                 "menuUrls":{"arrayValue":{"values":$menus}},
                 "webviewUrl":{"stringValue":"${defaultMenuUrls.firstOrNull() ?: ""}"},
+                "iframeBannerImage":{"stringValue":"${defaultInlineBannerImageUrl}"},
+                "iframeBannerTarget":{"stringValue":"${defaultInlineBannerTargetUrl}"},
                 "seededAt":{"timestampValue":"$timestamp"}
             }}
         """.trimIndent()
@@ -365,6 +379,26 @@ class Bolalive : AppCompatActivity() {
 
         val menuData = document.get("menuUrls") ?: document.get("menus")
         updateMenuUrls(menuData)
+
+        val iframeBannerImage = listOf(
+            document.getString("iframeBannerImage"),
+            document.getString("inlineBannerImage"),
+            document.getString("inlineAdImage")
+        ).firstNotNullOfOrNull { sanitizeUrl(it) }
+
+        val iframeBannerTarget = listOf(
+            document.getString("iframeBannerTarget"),
+            document.getString("inlineBannerTarget"),
+            document.getString("inlineAdTarget"),
+            document.getString("iframeBannerUrl")
+        ).firstNotNullOfOrNull { sanitizeUrl(it) }
+
+        if (iframeBannerImage != null && iframeBannerTarget != null) {
+            inlineBannerImageUrl = iframeBannerImage
+            inlineBannerTargetUrl = iframeBannerTarget
+        } else {
+            Log.w(TAG, "Inline banner skipped: image or target url missing in config")
+        }
 
         val startUrl = listOf(
             document.getString("webviewUrl"),
@@ -485,6 +519,7 @@ class Bolalive : AppCompatActivity() {
                 injectHideChrome(view)
                 injectPopupKiller(view)
                 injectPlayerDeAd(view)
+                injectIframeBanner(view)
             }
 
             override fun shouldInterceptRequest(
@@ -814,6 +849,100 @@ class Bolalive : AppCompatActivity() {
         """.trimIndent()
         view.post { view.evaluateJavascript(js, null) }
     }
+
+    private fun injectIframeBanner(view: WebView) {
+        val imgUrl = inlineBannerImageUrl ?: return
+        val clickUrl = inlineBannerTargetUrl ?: return
+        val safeImg = imgUrl.jsEscaped()
+        val safeClick = clickUrl.jsEscaped()
+
+        val js = """
+            (function() {
+              try {
+                const img = '$safeImg';
+                const link = '$safeClick';
+                if (!img || !link) return;
+
+                const styleId = '__wv_iframe_banner_style';
+                if (!document.getElementById(styleId)) {
+                  const css = `
+                    .__wv_iframe_banner { margin:12px auto; max-width:360px; width:95%; display:flex; flex-direction:column; border-radius:10px; overflow:hidden; box-shadow:0 6px 18px rgba(0,0,0,0.2); background:#0d0d0d; }
+                    .__wv_iframe_banner img { width:100%; height:auto; display:block; object-fit:cover; }
+                    .__wv_iframe_banner .__wv_iframe_banner_label { background:rgba(0,0,0,0.72); color:#fff; text-transform:uppercase; letter-spacing:1px; font-size:12px; font-weight:700; padding:6px 10px; }
+                    .__wv_iframe_banner .__wv_iframe_banner_imgwrap { position:relative; }
+                    .__wv_iframe_banner .__wv_iframe_banner_imgwrap::after { content:''; position:absolute; inset:0; box-shadow:inset 0 0 0 1px rgba(255,255,255,0.08); pointer-events:none; }
+                    .__wv_iframe_banner a { text-decoration:none; }
+                  `;
+                  const styleEl = document.createElement('style');
+                  styleEl.id = styleId;
+                  styleEl.textContent = css;
+                  document.documentElement.appendChild(styleEl);
+                }
+
+                function buildBanner() {
+                  const wrapper = document.createElement('div');
+                  wrapper.className = '__wv_iframe_banner';
+                  wrapper.setAttribute('role','presentation');
+
+                  const anchor = document.createElement('a');
+                  anchor.href = link;
+                  anchor.target = '_blank';
+                  anchor.rel = 'noopener noreferrer';
+
+                  const label = document.createElement('div');
+                  label.className = '__wv_iframe_banner_label';
+                  label.textContent = 'ADS';
+
+                  const imgWrap = document.createElement('div');
+                  imgWrap.className = '__wv_iframe_banner_imgwrap';
+
+                  const image = document.createElement('img');
+                  image.loading = 'lazy';
+                  image.src = img;
+                  image.alt = 'ads banner';
+
+                  imgWrap.appendChild(image);
+                  anchor.appendChild(label);
+                  anchor.appendChild(imgWrap);
+                  wrapper.appendChild(anchor);
+                  return wrapper;
+                }
+
+                function attachBanner(target) {
+                  if (!target || target.dataset?.wvBanner === '1') return false;
+                  const banner = buildBanner();
+                  target.insertAdjacentElement('beforebegin', banner);
+                  target.dataset.wvBanner = '1';
+                  return true;
+                }
+
+                function sweep(root) {
+                  let injected = 0;
+                  (root || document).querySelectorAll('iframe, video').forEach(node => {
+                    if (attachBanner(node)) injected++;
+                  });
+                  return injected;
+                }
+
+                sweep(document);
+                const mo = new MutationObserver(muts => {
+                  muts.forEach(m => {
+                    m.addedNodes && m.addedNodes.forEach(n => {
+                      if (!(n instanceof HTMLElement)) return;
+                      sweep(n);
+                    });
+                  });
+                });
+                mo.observe(document.documentElement, { childList:true, subtree:true });
+              } catch(e) {}
+            })();
+        """.trimIndent()
+
+        view.post { view.evaluateJavascript(js, null) }
+    }
+
+    private fun String.jsEscaped(): String =
+        this.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n")
 }
 
 /** Ad-blocker: blok host/keyword + tebak MIME agar respons 204 aman untuk semua type */
