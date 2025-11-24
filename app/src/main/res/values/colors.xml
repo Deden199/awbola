@@ -8,12 +8,12 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
 
-    <!-- Custom palette for the refreshed UI -->
-    <color name="bg_gradient_start">#0E1224</color>
-    <color name="bg_gradient_end">#0A0D18</color>
-    <color name="accent_primary">#7AD7F0</color>
-    <color name="accent_secondary">#6E7BFF</color>
-    <color name="surface_tint">#1C2136</color>
-    <color name="surface_dim">#16192A</color>
-    <color name="text_muted">#BFC7E6</color>
+    <!-- Custom palette for the refreshed (light) UI -->
+    <color name="bg_gradient_start">#F5F7FB</color>
+    <color name="bg_gradient_end">#FFFFFFFF</color>
+    <color name="accent_primary">#2D72E0</color>
+    <color name="accent_secondary">#4FC3F7</color>
+    <color name="surface_tint">#FFFFFF</color>
+    <color name="surface_dim">#E6EFFA</color>
+    <color name="text_muted">#5C6B7A</color>
 </resources>
