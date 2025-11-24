@@ -866,7 +866,7 @@ class Bolalive : AppCompatActivity() {
                 const styleId = '__wv_iframe_banner_style';
                 if (!document.getElementById(styleId)) {
                   const css = `
-                    .__wv_iframe_banner { margin:12px auto; max-width:360px; width:95%; display:flex; flex-direction:column; border-radius:10px; overflow:hidden; box-shadow:0 6px 18px rgba(0,0,0,0.2); background:#0d0d0d; }
+                    .__wv_iframe_banner { margin:16px auto 10px; max-width:360px; width:95%; display:flex; flex-direction:column; border-radius:10px; overflow:hidden; box-shadow:0 6px 18px rgba(0,0,0,0.2); background:#0d0d0d; }
                     .__wv_iframe_banner img { width:100%; height:auto; display:block; object-fit:cover; }
                     .__wv_iframe_banner .__wv_iframe_banner_label { background:rgba(0,0,0,0.72); color:#fff; text-transform:uppercase; letter-spacing:1px; font-size:12px; font-weight:700; padding:6px 10px; }
                     .__wv_iframe_banner .__wv_iframe_banner_imgwrap { position:relative; }
@@ -911,7 +911,7 @@ class Bolalive : AppCompatActivity() {
                 function attachBanner(target) {
                   if (!target || target.dataset?.wvBanner === '1') return false;
                   const banner = buildBanner();
-                  target.insertAdjacentElement('beforebegin', banner);
+                  target.insertAdjacentElement('afterend', banner);
                   target.dataset.wvBanner = '1';
                   return true;
                 }
