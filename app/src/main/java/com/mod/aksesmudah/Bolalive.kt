@@ -5,36 +5,38 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.content.pm.ActivityInfo
+import android.widget.FrameLayout
+
 import android.os.Bundle
 import android.os.Message
-import android.webkit.*
-import androidx.appcompat.app.AppCompatActivity
-import androidx.recyclerview.widget.RecyclerView
-import androidx.viewpager2.widget.ViewPager2
-import androidx.viewpager2.widget.CompositePageTransformer
-import androidx.viewpager2.widget.MarginPageTransformer
-import com.bumptech.glide.Glide
-import com.google.android.material.bottomnavigation.BottomNavigationView
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.*
 import android.widget.ImageView
-import java.io.ByteArrayInputStream
-import java.util.Locale
-import java.time.Instant
-import kotlin.math.abs
-
+import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.RecyclerView
+import androidx.viewpager2.widget.CompositePageTransformer
+import androidx.viewpager2.widget.MarginPageTransformer
+import androidx.viewpager2.widget.ViewPager2
+import com.bumptech.glide.Glide
+import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
 import java.io.BufferedReader
+import java.io.ByteArrayInputStream
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
+import java.time.Instant
+import java.util.Locale
+import kotlin.math.abs
 
 class Bolalive : AppCompatActivity() {
 
@@ -42,6 +44,9 @@ class Bolalive : AppCompatActivity() {
     private lateinit var bannerPager: ViewPager2
     private lateinit var bottomNav: BottomNavigationView
     private lateinit var bannerAdapter: BannerSliderAdapter
+    // state untuk fullscreen video
+    private var customView: View? = null
+    private var customViewCallback: WebChromeClient.CustomViewCallback? = null
 
     private val firestore: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
 
@@ -76,8 +81,8 @@ class Bolalive : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Pakai layout dengan banner + webview + bottom nav
         setContentView(R.layout.activity_bolalive)
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
 
         FirebaseApp.initializeApp(this)
 
@@ -90,6 +95,7 @@ class Bolalive : AppCompatActivity() {
         menuUrls.clear()
         menuUrls.addAll(defaultMenuUrls)
 
+        // default inline banner (fallback kalau Firestore belum punya field)
         inlineBannerImageUrl = sanitizeUrl(defaultInlineBannerImageUrl)
         inlineBannerTargetUrl = sanitizeUrl(defaultInlineBannerTargetUrl)
 
@@ -207,7 +213,6 @@ class Bolalive : AppCompatActivity() {
 
         menuUrls.clear()
         menuUrls.addAll(merged)
-
     }
 
     private fun fetchRemoteConfig() {
@@ -227,7 +232,6 @@ class Bolalive : AppCompatActivity() {
     }
 
     private fun seedFirestoreConfigIfMissing(onComplete: () -> Unit) {
-        // Cek Google Play Services dulu agar tidak crash pada perangkat yang tidak ada GMS (pesan "Unknown calling package name").
         val hasGms = GoogleApiAvailability.getInstance()
             .isGooglePlayServicesAvailable(this) == ConnectionResult.SUCCESS
 
@@ -268,7 +272,6 @@ class Bolalive : AppCompatActivity() {
                     }
             }
             .addOnFailureListener { e ->
-                // Fallback jika error karena GMS
                 if (e is SecurityException && e.message?.contains("com.google.android.gms") == true) {
                     Log.w(TAG, "Seeding gagal karena GMS, coba REST", e)
                     seedViaRest(onComplete)
@@ -282,7 +285,8 @@ class Bolalive : AppCompatActivity() {
     private fun seedViaRest(onComplete: () -> Unit) {
         Thread {
             try {
-                val baseUrl = "https://firestore.googleapis.com/v1/projects/${BuildConfig.FIREBASE_PROJECT_ID}/databases/(default)/documents/$CONFIG_COLLECTION/$CONFIG_DOCUMENT"
+                val baseUrl =
+                    "https://firestore.googleapis.com/v1/projects/${BuildConfig.FIREBASE_PROJECT_ID}/databases/(default)/documents/$CONFIG_COLLECTION/$CONFIG_DOCUMENT"
                 val getUrl = URL("$baseUrl?key=${BuildConfig.FIREBASE_API_KEY}")
                 val getConn = (getUrl.openConnection() as HttpURLConnection).apply {
                     requestMethod = "GET"
@@ -304,7 +308,7 @@ class Bolalive : AppCompatActivity() {
                         Log.w(
                             TAG,
                             "REST: Firestore database belum dibuat untuk project ${BuildConfig.FIREBASE_PROJECT_ID}. " +
-                                "Buat terlebih dahulu di console lalu coba lagi. Response: $body"
+                                    "Buat terlebih dahulu di console lalu coba lagi. Response: $body"
                         )
                     } else {
                         Log.w(TAG, "REST seeding gagal (404): $body")
@@ -314,13 +318,14 @@ class Bolalive : AppCompatActivity() {
                 }
 
                 val payload = buildSeedJson()
-                val postConn = (URL("$baseUrl?key=${BuildConfig.FIREBASE_API_KEY}").openConnection() as HttpURLConnection).apply {
-                    requestMethod = "PATCH"
-                    doOutput = true
-                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                    connectTimeout = 5000
-                    readTimeout = 5000
-                }
+                val postConn =
+                    (URL("$baseUrl?key=${BuildConfig.FIREBASE_API_KEY}").openConnection() as HttpURLConnection).apply {
+                        requestMethod = "PATCH"
+                        doOutput = true
+                        setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                        connectTimeout = 5000
+                        readTimeout = 5000
+                    }
 
                 postConn.outputStream.use { it.write(payload.toByteArray()) }
 
@@ -351,7 +356,9 @@ class Bolalive : AppCompatActivity() {
 
     private fun buildSeedJson(): String {
         fun arrayJson(values: List<String>): String {
-            return values.joinToString(prefix = "[", postfix = "]") { "{\"stringValue\":\"" + it + "\"}" }
+            return values.joinToString(prefix = "[", postfix = "]") {
+                "{\"stringValue\":\"" + it + "\"}"
+            }
         }
 
         val banners = arrayJson(defaultBannerImages)
@@ -496,19 +503,83 @@ class Bolalive : AppCompatActivity() {
             }
 
             override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
-                callback?.onCustomViewHidden()
+                if (view == null) {
+                    callback?.onCustomViewHidden()
+                    return
+                }
+
+                // kalau sudah ada customView aktif, tutup request baru
+                if (customView != null) {
+                    callback?.onCustomViewHidden()
+                    return
+                }
+
+                val decor = window.decorView as FrameLayout
+
+                customView = view
+                customViewCallback = callback
+
+                decor.addView(
+                    customView,
+                    FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                    )
+                )
+
+                // sembunyikan UI lain saat fullscreen
+                webView.visibility = View.GONE
+                bannerPager.visibility = View.GONE
+                bottomNav.visibility = View.GONE
+
+                // paksa landscape ketika fullscreen
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             }
 
             override fun onHideCustomView() {
+                val decor = window.decorView as FrameLayout
+
+                customView?.let { decor.removeView(it) }
+                customView = null
+
+                // tampilkan lagi UI normal
+                webView.visibility = View.VISIBLE
+                bannerPager.visibility = View.VISIBLE
+                bottomNav.visibility = View.VISIBLE
+
+                // balik ke portrait
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+
+                customViewCallback?.onCustomViewHidden()
+                customViewCallback = null
+
                 super.onHideCustomView()
             }
+
         }
 
         wv.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                val uri = request.url
+                val scheme = uri.scheme ?: ""
+                val url = uri.toString()
                 val isMain = request.isForMainFrame
-                val url = request.url.toString()
-                if (request.url.scheme !in listOf("http", "https")) return true
+
+                // === khusus klik banner ads: buka Chrome ===
+                if (scheme == "bolalive-banner") {
+                    val target = uri.getQueryParameter("u")
+                    if (!target.isNullOrBlank()) {
+                        val decoded = Uri.decode(target)
+                        try {
+                            openInChrome(decoded)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to open banner url in chrome: $decoded", e)
+                        }
+                    }
+                    return true
+                }
+
+                if (scheme !in listOf("http", "https")) return true
                 if (!isMain) return false
                 view.loadUrl(url)
                 return true
@@ -562,7 +633,7 @@ class Bolalive : AppCompatActivity() {
         super.onDestroy()
     }
 
-    // ====== JS: buang param ?ad= dari iframe player bfh5.ygrbf.cc (matikan iklan 3–5 detik) ======
+    // ====== JS: buang param ?ad= dari iframe player bfh5.ygrbf.cc ======
     private fun injectPlayerDeAd(view: WebView) {
         val js = """
             (function() {
@@ -601,7 +672,7 @@ class Bolalive : AppCompatActivity() {
         view.post { view.evaluateJavascript(js, null) }
     }
 
-    // ====== CSS/JS: sembunyikan header/footer & fixed bars + target elemen spesifik (guarded) ======
+    // ====== CSS/JS: sembunyikan header/footer & fixed bars + target elemen spesifik ======
     private fun injectHideChrome(view: WebView) {
         val js = """
             (function() {
@@ -652,49 +723,51 @@ class Bolalive : AppCompatActivity() {
                   return removed;
                 }
 
-                  function nukeTargetsOnce() {
-                    const sels = [
-                      '.maskClass',
-                      '.centerViewClass',
-                      '.bottomDownload',
-                      '.topDownloadBox',
-                      '.topDownload-keep-px',
-                      '.product-html-class',
-                      '.van-button.van-button--default.van-button--normal.van-button--round',
-                      'img.kehuIcon',
-                      'img.play_off_btn',
-                      '.swipeBox',
+                function nukeTargetsOnce() {
+                  const sels = [
+                    '.maskClass',
+                    '.centerViewClass',
+                    '.bottomDownload',
+                    '.topDownloadBox',
+                    '.topDownload-keep-px',
+                    '.product-html-class',
+                    '.van-button.van-button--default.van-button--normal.van-button--round',
+                    'img.kehuIcon',
+                    'img.play_off_btn',
+                    '.swipeBox',
                     '.van-swipe__indicators',
                     '.liveTimeDownload',
-                                        '.van-tabs__wrap',
-                                        '.van-tabs__nav',
-                                                            '.van-notice-bar__content',
-                                                            '#playerTabs'
+                    '.van-tabs__wrap',
+                    '.van-tabs__nav',
+                    '.van-notice-bar__content',
+                    '#playerTabs',
                     '.rightListBox',
                     '.noticebar',
+                    '.cover',        
+                    '.countdown' , 
                     '.van-notice-bar',
                     '.van-notice-bar__wrap',
                     '.van-notice-bar__content'
+                    
                   ];
                   let found = false;
                   sels.forEach(sel => {
                     const list = document.querySelectorAll(sel);
                     if (list.length) found = true;
-                                        list.forEach(n => {
-                                          if (sel === '#playerTabs') softHide(n); else n.remove();
-                                        });
-                      list.forEach(n => n.remove());
+                    list.forEach(n => {
+                      if (sel === '#playerTabs') softHide(n); else n.remove();
                     });
+                  });
 
-                    document.querySelectorAll('button, .van-button, [role="button"]').forEach(btn => {
-                      const t = (btn.textContent || '').trim().toLowerCase();
-                      if (t === 'gabung') { btn.remove(); found = true; }
-                    });
+                  document.querySelectorAll('button, .van-button, [role="button"]').forEach(btn => {
+                    const t = (btn.textContent || '').trim().toLowerCase();
+                    if (t === 'gabung') { btn.remove(); found = true; }
+                  });
 
-                    document.querySelectorAll('.btn, .bottomDownload .btn, .rightcon .btn, .topDownloadBox .btn').forEach(x => {
-                      const t = (x.textContent || '').trim().toLowerCase();
-                      if (t === 'unduh') { (x.closest('.bottomDownload, .topDownloadBox') || x).remove(); found = true; }
-                    });
+                  document.querySelectorAll('.btn, .bottomDownload .btn, .rightcon .btn, .topDownloadBox .btn').forEach(x => {
+                    const t = (x.textContent || '').trim().toLowerCase();
+                    if (t === 'unduh') { (x.closest('.bottomDownload, .topDownloadBox') || x).remove(); found = true; }
+                  });
 
                   if (removeAdIframes()) found = true;
 
@@ -734,7 +807,7 @@ class Bolalive : AppCompatActivity() {
         view.post { view.evaluateJavascript(js, null) }
     }
 
-    // ====== JS: blokir popup/overlay/modal + netralisir window.open + sweep selektif (guarded) ======
+    // ====== JS: blokir popup/overlay/modal + sweep ======
     private fun injectPopupKiller(view: WebView) {
         val js = """
             (function() {
@@ -801,14 +874,16 @@ class Bolalive : AppCompatActivity() {
                     '.product-html-class',
                     '.van-button.van-button--default.van-button--normal.van-button--round',
                     'img.kehuIcon',
-                                        '.van-tabs__wrap',
-                                        '.van-tabs__nav',
+                    '.van-tabs__wrap',
+                    '.van-tabs__nav',
                     'img.play_off_btn',
                     '.swipeBox',
                     '.van-swipe__indicators',
                     '.liveTimeDownload',
                     '.rightListBox',
                     '.noticebar',
+                     '.cover',        
+                    '.countdown' , 
                     '.van-notice-bar',
                     '.van-notice-bar__wrap',
                     '.van-notice-bar__content'
@@ -818,7 +893,6 @@ class Bolalive : AppCompatActivity() {
                     list.forEach(n => n.remove());
                   });
                   document.querySelectorAll('#playerTabs').forEach(n => { softHide(n); hit = true; });
-
 
                   document.querySelectorAll('button, .van-button, [role="button"]').forEach(btn => {
                     const t = (btn.textContent || '').trim().toLowerCase();
@@ -861,96 +935,118 @@ class Bolalive : AppCompatActivity() {
         val safeClick = clickUrl.jsEscaped()
 
         val js = """
-            (function() {
-              try {
-                const img = '$safeImg';
-                const link = '$safeClick';
-                if (!img || !link) return;
+        (function() {
+          try {
+            var img = '$safeImg';
+            var link = '$safeClick';
+            if (!img || !link) return;
 
-                const styleId = '__wv_iframe_banner_style';
-                if (!document.getElementById(styleId)) {
-                  const css = `
-                    .__wv_iframe_banner { margin:16px auto 10px; max-width:360px; width:95%; display:flex; flex-direction:column; border-radius:10px; overflow:hidden; box-shadow:0 6px 18px rgba(0,0,0,0.2); background:#0d0d0d; }
-                    .__wv_iframe_banner img { width:100%; height:auto; display:block; object-fit:cover; }
-                    .__wv_iframe_banner .__wv_iframe_banner_label { background:rgba(0,0,0,0.72); color:#fff; text-transform:uppercase; letter-spacing:1px; font-size:12px; font-weight:700; padding:6px 10px; }
-                    .__wv_iframe_banner .__wv_iframe_banner_imgwrap { position:relative; }
-                    .__wv_iframe_banner .__wv_iframe_banner_imgwrap::after { content:''; position:absolute; inset:0; box-shadow:inset 0 0 0 1px rgba(255,255,255,0.08); pointer-events:none; }
-                    .__wv_iframe_banner a { text-decoration:none; }
-                  `;
-                  const styleEl = document.createElement('style');
-                  styleEl.id = styleId;
-                  styleEl.textContent = css;
-                  document.documentElement.appendChild(styleEl);
-                }
+            var styleId = '__wv_iframe_banner_style';
+            if (!document.getElementById(styleId)) {
+              var css = ''
+                + '.__wv_iframe_banner { margin:16px auto 10px; max-width:360px; width:95%;'
+                + ' display:flex; flex-direction:column; border-radius:10px; overflow:hidden;'
+                + ' box-shadow:0 6px 18px rgba(0,0,0,0.2); background:#0d0d0d; }'
+                + '.__wv_iframe_banner img { width:100%; height:auto; display:block; object-fit:cover; }'
+                + '.__wv_iframe_banner .__wv_iframe_banner_label { background:rgba(0,0,0,0.72);'
+                + ' color:#fff; text-transform:uppercase; letter-spacing:1px; font-size:12px;'
+                + ' font-weight:700; padding:6px 10px; }'
+                + '.__wv_iframe_banner .__wv_iframe_banner_imgwrap { position:relative; }'
+                + '.__wv_iframe_banner .__wv_iframe_banner_imgwrap::after { content:""; position:absolute; inset:0;'
+                + ' box-shadow:inset 0 0 0 1px rgba(255,255,255,0.08); pointer-events:none; }'
+                + '.__wv_iframe_banner a { text-decoration:none; }';
 
-                function buildBanner() {
-                  const wrapper = document.createElement('div');
-                  wrapper.className = '__wv_iframe_banner';
-                  wrapper.setAttribute('role','presentation');
+              var styleEl = document.createElement('style');
+              styleEl.id = styleId;
+              styleEl.type = 'text/css';
+              styleEl.appendChild(document.createTextNode(css));
+              document.documentElement.appendChild(styleEl);
+            }
 
-                  const anchor = document.createElement('a');
-                  anchor.href = link;
-                  anchor.target = '_blank';
-                  anchor.rel = 'noopener noreferrer';
+            function buildBanner() {
+              var wrapper = document.createElement('div');
+              wrapper.className = '__wv_iframe_banner';
+              wrapper.setAttribute('role','presentation');
 
-                  const label = document.createElement('div');
-                  label.className = '__wv_iframe_banner_label';
-                  label.textContent = 'ADS';
+              var anchor = document.createElement('a');
+              // custom scheme supaya Android buka via Chrome
+              var encoded = encodeURIComponent(link);
+              anchor.href = 'bolalive-banner://open?u=' + encoded;
+              anchor.target = '_self';
+              anchor.rel = 'noopener noreferrer';
 
-                  const imgWrap = document.createElement('div');
-                  imgWrap.className = '__wv_iframe_banner_imgwrap';
+              var label = document.createElement('div');
+              label.className = '__wv_iframe_banner_label';
+              label.textContent = 'ADS';
 
-                  const image = document.createElement('img');
-                  image.loading = 'lazy';
-                  image.src = img;
-                  image.alt = 'ads banner';
+              var imgWrap = document.createElement('div');
+              imgWrap.className = '__wv_iframe_banner_imgwrap';
 
-                  imgWrap.appendChild(image);
-                  anchor.appendChild(label);
-                  anchor.appendChild(imgWrap);
-                  wrapper.appendChild(anchor);
-                  return wrapper;
-                }
+              var image = document.createElement('img');
+              image.loading = 'lazy';
+              image.src = img;
+              image.alt = 'ads banner';
 
-                function attachBanner(target, position) {
-                  if (!target) return false;
-                  const marker = position === 'before' ? 'wvBannerBefore' : 'wvBannerAfter';
-                  if (target.dataset?.[marker] === '1') return false;
-                  const banner = buildBanner();
-                  if (position === 'before') {
-                    target.insertAdjacentElement('beforebegin', banner);
-                  } else {
-                    target.insertAdjacentElement('afterend', banner);
+              imgWrap.appendChild(image);
+              anchor.appendChild(label);
+              anchor.appendChild(imgWrap);
+              wrapper.appendChild(anchor);
+              return wrapper;
+            }
+
+            function insertBelowVideoBox(root) {
+              var doc = root || document;
+              var vbList = doc.getElementsByClassName('videoBox');
+              if (vbList.length === 0) {
+                return false;
+              }
+              var vb = vbList[0];
+              if (vb.getAttribute('data-wv-banner-below') === '1') {
+                return false;
+              }
+              var banner = buildBanner();
+              if (vb.parentNode) {
+                vb.parentNode.insertBefore(banner, vb.nextSibling);
+                vb.setAttribute('data-wv-banner-below', '1');
+                return true;
+              }
+              return false;
+            }
+
+            function fallbackToBody() {
+              if (!document.body) return false;
+              if (document.body.getAttribute('data-wv-banner-body') === '1') return false;
+              var banner = buildBanner();
+              document.body.appendChild(banner);
+              document.body.setAttribute('data-wv-banner-body', '1');
+              return true;
+            }
+
+            function sweep(root) {
+              var inserted = insertBelowVideoBox(root);
+              if (!inserted) {
+                fallbackToBody();
+              }
+            }
+
+            sweep(document);
+
+            var mo = new MutationObserver(function(muts) {
+              for (var i = 0; i < muts.length; i++) {
+                var m = muts[i];
+                if (!m.addedNodes) continue;
+                for (var j = 0; j < m.addedNodes.length; j++) {
+                  var n = m.addedNodes[j];
+                  if (n && n.nodeType === 1) {
+                    sweep(n);
                   }
-                  target.dataset[marker] = '1';
-                  return true;
                 }
-
-                function sweep(root) {
-                  let injected = 0;
-                  (root || document).querySelectorAll('iframe, video').forEach(node => {
-                    if (attachBanner(node, 'after')) injected++;
-                  });
-
-                  (root || document).querySelectorAll('#playerTabs').forEach(node => {
-                    if (attachBanner(node, 'before')) injected++;
-                  });
-                  return injected;
-                }
-
-                sweep(document);
-                const mo = new MutationObserver(muts => {
-                  muts.forEach(m => {
-                    m.addedNodes && m.addedNodes.forEach(n => {
-                      if (!(n instanceof HTMLElement)) return;
-                      sweep(n);
-                    });
-                  });
-                });
-                mo.observe(document.documentElement, { childList:true, subtree:true });
-              } catch(e) {}
-            })();
-        """.trimIndent()
+              }
+            });
+            mo.observe(document.documentElement, { childList:true, subtree:true });
+          } catch(e) {}
+        })();
+    """.trimIndent()
 
         view.post { view.evaluateJavascript(js, null) }
     }
@@ -966,7 +1062,6 @@ object AdBlocker {
         "adservice.google.com","adservice.google.co.id","ads.pubmatic.com",
         "adnxs.com","rubiconproject.com","criteo.com","taboola.com","outbrain.com",
         "scorecardresearch.com","zedo.com","media.net",
-        // Tambahan promo/iklan
         "spb", "spotbet", "adserver", "popads"
     )
 
