@@ -17,6 +17,7 @@ import android.view.ViewGroup
 import android.webkit.*
 import android.widget.ImageView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.CompositePageTransformer
 import androidx.viewpager2.widget.MarginPageTransformer
@@ -125,6 +126,12 @@ class Bolalive : AppCompatActivity() {
     }
 
     private fun setupBottomNav() {
+        val colorState = ContextCompat.getColorStateList(this, R.color.nav_item_color)
+        if (colorState != null) {
+            bottomNav.itemIconTintList = colorState
+            bottomNav.itemTextColor = colorState
+        }
+
         bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
                 R.id.menu_home -> loadMenuUrl(0)
