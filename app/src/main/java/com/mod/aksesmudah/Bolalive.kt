@@ -118,8 +118,10 @@ class Bolalive : AppCompatActivity() {
         bannerPager.adapter = bannerAdapter
         bannerPager.offscreenPageLimit = 3
 
+        val pageMargin = resources.getDimensionPixelOffset(R.dimen.banner_page_margin)
+
         val transformer = CompositePageTransformer().apply {
-            addTransformer(MarginPageTransformer(32))
+            addTransformer(MarginPageTransformer(pageMargin))
             addTransformer { page, position ->
                 val scale = 0.9f + (1 - abs(position)) * 0.1f
                 page.scaleY = scale
