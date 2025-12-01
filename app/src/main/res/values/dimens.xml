@@ -1,0 +1,18 @@
+<resources>
+    <dimen name="screen_bottom_padding">8dp</dimen>
+
+    <dimen name="banner_horizontal_padding">3dp</dimen>
+    <dimen name="banner_vertical_padding">3dp</dimen>
+    <dimen name="banner_bottom_padding">4dp</dimen>
+    <dimen name="banner_card_margin">8dp</dimen>
+    <dimen name="banner_corner_radius">18dp</dimen>
+    <dimen name="banner_card_elevation">10dp</dimen>
+    <dimen name="banner_page_margin">32dp</dimen>
+
+    <dimen name="webview_margin_top">8dp</dimen>
+
+    <dimen name="bottom_nav_height">72dp</dimen>
+    <dimen name="bottom_nav_margin_horizontal">12dp</dimen>
+    <dimen name="bottom_nav_margin_bottom">10dp</dimen>
+    <dimen name="bottom_nav_icon_size">26dp</dimen>
+</resources>

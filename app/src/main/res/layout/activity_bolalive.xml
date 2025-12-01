@@ -6,7 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/bg_main_gradient"
-    android:paddingBottom="8dp">
+    android:paddingBottom="@dimen/screen_bottom_padding">
 
     <!-- Banner Slider -->
     <androidx.viewpager2.widget.ViewPager2
@@ -15,10 +15,10 @@
         android:layout_height="0dp"
         android:clipToPadding="false"
         android:clipChildren="false"
-        android:paddingStart="3dp"
-        android:paddingEnd="3dp"
-        android:paddingTop="3dp"
-        android:paddingBottom="4dp"
+        android:paddingStart="@dimen/banner_horizontal_padding"
+        android:paddingEnd="@dimen/banner_horizontal_padding"
+        android:paddingTop="@dimen/banner_vertical_padding"
+        android:paddingBottom="@dimen/banner_bottom_padding"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -35,24 +35,24 @@
         app:layout_constraintBottom_toTopOf="@id/bottomNav"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="8dp" />
+        android:layout_marginTop="@dimen/webview_margin_top" />
 
     <!-- Bottom Navigation -->
     <!-- Bottom Navigation -->
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/bottomNav"
         android:layout_width="0dp"
-        android:layout_height="72dp"
-        android:layout_marginStart="12dp"
-        android:layout_marginEnd="12dp"
-        android:layout_marginBottom="10dp"
+        android:layout_height="@dimen/bottom_nav_height"
+        android:layout_marginStart="@dimen/bottom_nav_margin_horizontal"
+        android:layout_marginEnd="@dimen/bottom_nav_margin_horizontal"
+        android:layout_marginBottom="@dimen/bottom_nav_margin_bottom"
 
     android:background="#F2F5FF"
     android:elevation="0dp"
 
     app:backgroundTint="@null"
     app:itemBackground="@android:color/transparent"
-    app:itemIconSize="26dp"
+    app:itemIconSize="@dimen/bottom_nav_icon_size"
 
     app:itemRippleColor="#334A90E2"
     app:labelVisibilityMode="labeled"

@@ -7,10 +7,10 @@
     <androidx.cardview.widget.CardView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_margin="8dp"
-        app:cardCornerRadius="18dp"
+        android:layout_margin="@dimen/banner_card_margin"
+        app:cardCornerRadius="@dimen/banner_corner_radius"
         app:cardUseCompatPadding="true"
-        app:cardElevation="10dp"
+        app:cardElevation="@dimen/banner_card_elevation"
         app:cardPreventCornerOverlap="true"
         app:cardBackgroundColor="@color/surface_tint">
 
