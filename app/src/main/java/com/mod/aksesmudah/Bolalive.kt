@@ -17,6 +17,7 @@ import android.view.ViewGroup
 import android.webkit.*
 import android.widget.ImageView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.CompositePageTransformer
@@ -81,6 +82,7 @@ class Bolalive : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
 
         setContentView(R.layout.activity_bolalive)
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
@@ -90,7 +92,9 @@ class Bolalive : AppCompatActivity() {
         webView = findViewById(R.id.mainWebView)
         bannerPager = findViewById(R.id.bannerPager)
         bottomNav = findViewById(R.id.bottomNav)
-
+        bottomNav.itemBackground = null
+        bottomNav.backgroundTintList = null
+        bottomNav.elevation = 0f
         bannerImages.clear()
         bannerImages.addAll(defaultBannerImages)
         menuUrls.clear()
